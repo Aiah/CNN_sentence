@@ -17,6 +17,7 @@ import re
 import warnings
 import sys
 import time
+# from conv_net_classes import *
 warnings.filterwarnings("ignore")   
 
 #different non-linearities
@@ -305,7 +306,8 @@ if __name__=="__main__":
         print "using: word2vec vectors"
         U = W
     results = []
-    r = range(0,10)    
+    # r = range(0,10)
+    r = range(0, 2)
     for i in r:
         datasets = make_idx_data_cv(revs, word_idx_map, i, max_l=56,k=300, filter_h=5)
         perf = train_conv_net(datasets,
