@@ -52,3 +52,11 @@ epoch: 1, training time: 16.49 secs, train perf: 81.80 %, val perf: 78.32 %
 epoch: 2, training time: 16.12 secs, train perf: 82.53 %, val perf: 76.74 %
 epoch: 3, training time: 16.16 secs, train perf: 91.87 %, val perf: 81.37 %
 ```
+
+json：
+
+/*
+hidden_units: 100: feature map 个数， 2：最终分类个数
+static: static代表embbeding不变
+word_vectors: word2vec or rand
+*/
