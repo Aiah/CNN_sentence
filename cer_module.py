@@ -46,7 +46,7 @@ class EmbeddingLayer(object):
         self.Words = theano.shared(value=U, name="Words")
 
     def build(self, x):
-        self.Words[T.cast(x.flatten(), dtype="int32")].reshape((x.shape[0], 1, x.shape[1], self.Words.shape[1]))
+        return self.Words[T.cast(x.flatten(), dtype="int32")].reshape((x.shape[0], 1, x.shape[1], self.Words.shape[1]))
 
 
 class LeNetConvPoolLayer(object):
@@ -103,6 +103,7 @@ class LeNetConvPoolLayer(object):
         :type input: theano.tensor.dtensor4
         :param input: symbolic image tensor, of shape image_shape
         """
+        print "input type: {}, filters={}, filter_shape={}, image_shape={}".format(type(input), self.W, self.filter_shape, self.image_shape)
         # convolve input feature maps with filters
         conv_out = conv.conv2d(input=input, filters=self.W, filter_shape=self.filter_shape,
                                image_shape=self.image_shape)

@@ -170,7 +170,7 @@ class CNN_Sen_Model(object):
         test_layer1_input = T.concatenate(test_pred_layers, 1)
         test_y_pred = self.classifier.predict(test_layer1_input)
         test_error = T.mean(T.neq(test_y_pred, self.y))
-        test_model_all = theano.function([self.x, self.y], test_error, allow_input_downcast=True)
+        test_model_all = theano.function([self.y], test_error, allow_input_downcast=True)
         # start training over mini-batches
         print '... training'
         epoch = 0
@@ -197,7 +197,7 @@ class CNN_Sen_Model(object):
                   % (epoch, time.time() - start_time, train_perf * 100., val_perf * 100.))
             if val_perf >= best_val_perf:
                 best_val_perf = val_perf
-                test_loss = test_model_all(test_set_x, test_set_y)
+                test_loss = test_model_all(test_set_y)
                 test_perf = 1 - test_loss
         return test_perf
 
