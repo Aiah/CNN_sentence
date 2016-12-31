@@ -4,7 +4,6 @@ My version of CNN Sentence classification Model
 @author: cer
 @forked_from: Yoon Kim
 """
-import cPickle
 import numpy as np
 from collections import defaultdict, OrderedDict
 import theano
@@ -13,7 +12,6 @@ import re
 import sys
 import time
 from cer_module import *
-import json
 
 
 class CNN_Sen_Model(object):
@@ -26,47 +24,26 @@ class CNN_Sen_Model(object):
         sqr_norm_lim = s^2 in the paper
         lr_decay = adadelta decay parameter
         """
-    def __init__(self, conf_file):
-        with open(conf_file, "r") as f:
-            self.conf = json.load(f)
-        print self.conf
-        self.load_data()
-        self.build_model()
+    def __init__(self, conf):
+        self.conf = conf
+        print "model configs: ", self.conf
+        # self.build_model()
 
-    def load_data(self):
-        """加载模型数据"""
-        print "loading data...",
-        x = cPickle.load(open("mr.p", "rb"))
-        self.revs, self.W, self.W2, self.word_idx_map, self.vocab = x[0], x[1], x[2], x[3], x[4]
-
-    def model_type(self):
-        if self.conf['non_static']:
-            print "model architecture: CNN-non-static"
-        else:
-            print "model architecture: CNN-static"
-        if self.conf['word_vectors'] == "rand":
-            print "using: random vectors"
-            U = self.W2
-        elif self.conf['word_vectors'] == "word2vec":
-            print "using: word2vec vectors"
-            U = self.W
-        return U, self.conf['non_static']
-
-    def build_model(self):
+    def build_model(self, U):
         """定义模型架构"""
         rng = np.random.RandomState(3435)
 
         # 导入一些模型参数
-        #img_h = len(datasets[0][0]) - 1
-        self.img_h = 64
-        filter_w = self.conf['img_w']
+        self.img_h = self.conf["max_l"]+max(self.conf["filter_hs"])*2-2
+        #self.img_h = self.conf['img_h']
+        self.img_w = self.conf['img_w']
+        filter_w = self.img_w
         feature_maps = self.conf['hidden_units'][0]
         filter_shapes = []
         pool_sizes = []
         for filter_h in self.conf['filter_hs']:
             filter_shapes.append((feature_maps, 1, filter_h, filter_w))
             pool_sizes.append((self.img_h - filter_h + 1, self.conf['img_w'] - filter_w + 1))
-        U, non_static = self.model_type()
 
         self.x = T.matrix('x')
         self.y = T.ivector('y')
@@ -78,6 +55,7 @@ class CNN_Sen_Model(object):
         self.conv_layers = []
         for i in xrange(len(self.conf['filter_hs'])):
             filter_shape = filter_shapes[i]
+            # print "filter_shape:", filter_shape
             pool_size = pool_sizes[i]
             conv_layer = LeNetConvPoolLayer(rng, image_shape=(self.conf['batch_size'], 1, self.img_h, self.conf['img_w']),
                                             filter_shape=filter_shape, poolsize=pool_size, non_linear=self.conf['conv_non_linear'])
@@ -106,7 +84,7 @@ class CNN_Sen_Model(object):
         params = self.classifier.params
         for conv_layer in self.conv_layers:
             params += conv_layer.params
-        if non_static:
+        if self.conf["non_static"]:
             # if word vectors are allowed to change, add them as model parameters
             params += [emb_output.Words]
 
@@ -115,7 +93,7 @@ class CNN_Sen_Model(object):
         self.grad_updates = sgd_updates_adadelta(params, self.dropout_cost, self.conf['lr_decay'],
                                             1e-6, self.conf['sqr_norm_lim'])
 
-    def build_function(self, train_set, val_set):
+    def build_function(self, train_set, val_set, test_set_x):
         index = T.lscalar()
         train_set_x, train_set_y = shared_dataset((train_set[:, :self.img_h], train_set[:, -1]))
         val_set_x, val_set_y = shared_dataset((val_set[:, :self.img_h], val_set[:, -1]))
@@ -136,6 +114,18 @@ class CNN_Sen_Model(object):
                                           self.x: train_set_x[index * self.conf['batch_size']:(index + 1) * self.conf['batch_size']],
                                           self.y: train_set_y[index * self.conf['batch_size']:(index + 1) * self.conf['batch_size']]},
                                       allow_input_downcast=True)
+        test_pred_layers = []
+        test_size = test_set_x.shape[0]
+        test_layer0_input = self.emb_layer.build(test_set_x)
+        print "emb_output shape : " + str(test_layer0_input.shape.eval())
+        for conv_layer in self.conv_layers:
+            test_layer0_output = conv_layer.predict(test_layer0_input, test_size)
+            print "conv_layer shape : " + str(test_layer0_output.shape.eval())
+            test_pred_layers.append(test_layer0_output.flatten(2))
+        test_layer1_input = T.concatenate(test_pred_layers, 1)
+        test_y_pred = self.classifier.predict(test_layer1_input)
+        test_error = T.mean(T.neq(test_y_pred, self.y))
+        self.test_model_all = theano.function([self.y], test_error, allow_input_downcast=True)
 
     def train(self, datasets):
         # shuffle dataset and assign to mini batches. if dataset size is not a multiple of mini batches, replicate
@@ -157,20 +147,10 @@ class CNN_Sen_Model(object):
         test_set_y = np.asarray(datasets[1][:, -1], "int32")
         train_set = new_data[:n_train_batches * self.conf['batch_size'], :]
         val_set = new_data[n_train_batches * self.conf['batch_size']:, :]
-        # build model functions
-        self.build_function(train_set, val_set)
-
         n_val_batches = n_batches - n_train_batches
-        test_pred_layers = []
-        test_size = test_set_x.shape[0]
-        test_layer0_input = self.emb_layer.build(test_set_x)
-        for conv_layer in self.conv_layers:
-            test_layer0_output = conv_layer.predict(test_layer0_input, test_size)
-            test_pred_layers.append(test_layer0_output.flatten(2))
-        test_layer1_input = T.concatenate(test_pred_layers, 1)
-        test_y_pred = self.classifier.predict(test_layer1_input)
-        test_error = T.mean(T.neq(test_y_pred, self.y))
-        test_model_all = theano.function([self.y], test_error, allow_input_downcast=True)
+        # build model functions
+        self.build_function(train_set, val_set, test_set_x)
+
         # start training over mini-batches
         print '... training'
         epoch = 0
@@ -184,11 +164,11 @@ class CNN_Sen_Model(object):
             if self.conf['shuffle_batch']:
                 for minibatch_index in np.random.permutation(range(n_train_batches)):
                     cost_epoch = self.train_model(minibatch_index)
-                    # set_zero(zero_vec)
+                    self.emb_layer.non_set_zero()
             else:
                 for minibatch_index in xrange(n_train_batches):
                     cost_epoch = self.train_model(minibatch_index)
-                    # set_zero(zero_vec)
+                    self.emb_layer.non_set_zero()
             train_losses = [self.test_model(i) for i in xrange(n_train_batches)]
             train_perf = 1 - np.mean(train_losses)
             val_losses = [self.val_model(i) for i in xrange(n_val_batches)]
@@ -197,7 +177,7 @@ class CNN_Sen_Model(object):
                   % (epoch, time.time() - start_time, train_perf * 100., val_perf * 100.))
             if val_perf >= best_val_perf:
                 best_val_perf = val_perf
-                test_loss = test_model_all(test_set_y)
+                test_loss = self.test_model_all(test_set_y)
                 test_perf = 1 - test_loss
         return test_perf
 
@@ -275,38 +255,36 @@ def safe_update(dict_to, dict_from):
     return dict_to
 
 
-def get_idx_from_sent(sent, word_idx_map, max_l=51, k=300, filter_h=5):
-    """
-    Transforms sentence into a list of indices. Pad with zeroes.
-    """
-    x = []
-    pad = filter_h - 1
-    for i in xrange(pad):
-        x.append(0)
-    words = sent.split()
-    for word in words:
-        if word in word_idx_map:
-            x.append(word_idx_map[word])
-    while len(x) < max_l + 2 * pad:
-        x.append(0)
-    return x
+# def get_idx_from_sent(sent, word_idx_map, max_l=51, k=300, filter_h=5):
+#     """
+#     Transforms sentence into a list of indices. Pad with zeroes.
+#     """
+#     x = []
+#     pad = filter_h - 1
+#     for i in xrange(pad):
+#         x.append(0)
+#     words = sent.split()
+#     for word in words:
+#         if word in word_idx_map:
+#             x.append(word_idx_map[word])
+#     while len(x) < max_l + 2 * pad:
+#         x.append(0)
+#     return x
+#
+#
+# def make_idx_data_cv(revs, word_idx_map, cv, max_l=51, k=300, filter_h=5):
+#     """
+#     Transforms sentences into a 2-d matrix.
+#     """
+#     train, test = [], []
+#     for rev in revs:
+#         sent = get_idx_from_sent(rev["text"], word_idx_map, max_l, k, filter_h)
+#         sent.append(rev["y"])
+#         if rev["split"] == cv:
+#             test.append(sent)
+#         else:
+#             train.append(sent)
+#     train = np.array(train, dtype="int")
+#     test = np.array(test, dtype="int")
+#     return [train, test]
 
-
-def make_idx_data_cv(revs, word_idx_map, cv, max_l=51, k=300, filter_h=5):
-    """
-    Transforms sentences into a 2-d matrix.
-    """
-    train, test = [], []
-    for rev in revs:
-        sent = get_idx_from_sent(rev["text"], word_idx_map, max_l, k, filter_h)
-        sent.append(rev["y"])
-        if rev["split"] == cv:
-            test.append(sent)
-        else:
-            train.append(sent)
-    train = np.array(train, dtype="int")
-    test = np.array(test, dtype="int")
-    return [train, test]
-
-if __name__ == '__main__':
-    model = CNN_Sen_Model(conf_file="model.json")

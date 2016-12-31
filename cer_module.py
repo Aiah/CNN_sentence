@@ -40,13 +40,25 @@ def add_to_params(params, param):
 class EmbeddingLayer(object):
     """Embedding Layer """
     def __init__(self, U):
+        self.img_w = U.shape[1]
         self.init_param(U)
 
     def init_param(self, U):
         self.Words = theano.shared(value=U, name="Words")
+        zero_vec_tensor = T.vector()
+        self.set_zero = theano.function([zero_vec_tensor],
+                                   updates=[(self.Words, T.set_subtensor(self.Words[0, :], zero_vec_tensor))],
+                                   allow_input_downcast=True)
 
     def build(self, x):
         return self.Words[T.cast(x.flatten(), dtype="int32")].reshape((x.shape[0], 1, x.shape[1], self.Words.shape[1]))
+
+    def non_set_zero(self):
+        """
+        将self.Words索引是0的一行的vector设为全0，代表这是里没有词
+        """
+        zero_vec = numpy.zeros(self.img_w)
+        self.set_zero(zero_vec)
 
 
 class LeNetConvPoolLayer(object):
@@ -103,7 +115,7 @@ class LeNetConvPoolLayer(object):
         :type input: theano.tensor.dtensor4
         :param input: symbolic image tensor, of shape image_shape
         """
-        print "input type: {}, filters={}, filter_shape={}, image_shape={}".format(type(input), self.W, self.filter_shape, self.image_shape)
+        # print "input type: {}, filters={}, filter_shape={}, image_shape={}".format(type(input), self.W, self.filter_shape, self.image_shape)
         # convolve input feature maps with filters
         conv_out = conv.conv2d(input=input, filters=self.W, filter_shape=self.filter_shape,
                                image_shape=self.image_shape)

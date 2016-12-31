@@ -28,7 +28,8 @@ def Tanh(x):
 def Iden(x):
     y = x
     return(y)
-        
+
+
 class HiddenLayer(object):
     """
     Class for HiddenLayer
@@ -66,9 +67,10 @@ class HiddenLayer(object):
         else:
             self.params = [self.W]
 
+
 def _dropout_from_layer(rng, layer, p):
     """p is the probablity of dropping a unit
-"""
+    """
     srng = theano.tensor.shared_randomstreams.RandomStreams(rng.randint(999999))
     # p=1-p because 1's indicate keep and p is prob of dropping
     mask = srng.binomial(n=1, p=1-p, size=layer.shape)
@@ -76,6 +78,7 @@ def _dropout_from_layer(rng, layer, p):
     # int * float32 = float64 which pulls things off the gpu
     output = layer * T.cast(mask, theano.config.floatX)
     return output
+
 
 class DropoutHiddenLayer(HiddenLayer):
     def __init__(self, rng, input, n_in, n_out,
@@ -85,6 +88,7 @@ class DropoutHiddenLayer(HiddenLayer):
                 activation=activation, use_bias=use_bias)
 
         self.output = _dropout_from_layer(rng, self.output, p=dropout_rate)
+
 
 class MLPDropout(object):
     """A multilayer perceptron with dropout"""
@@ -171,7 +175,8 @@ class MLPDropout(object):
             else:
                 p_y_given_x = T.nnet.softmax(T.dot(next_layer_input, layer.W) + layer.b)
         return p_y_given_x
-        
+
+
 class MLP(object):
     """Multi-Layer Perceptron Class
 
@@ -234,7 +239,8 @@ class MLP(object):
         # the parameters of the model are the parameters of the two layer it is
         # made out of
         self.params = self.hiddenLayer.params + self.logRegressionLayer.params
-        
+
+
 class LogisticRegression(object):
     """Multi-class Logistic Regression Class
 
@@ -336,7 +342,8 @@ class LogisticRegression(object):
             return T.mean(T.neq(self.y_pred, y))
         else:
             raise NotImplementedError()
-        
+
+
 class LeNetConvPoolLayer(object):
     """Pool Layer of a convolutional network """
 
@@ -415,4 +422,5 @@ class LeNetConvPoolLayer(object):
             pooled_out = downsample.max_pool_2d(input=conv_out, ds=self.poolsize, ignore_border=True)
             output = pooled_out + self.b.dimshuffle('x', 0, 'x', 'x')
         return output
-        
+
+

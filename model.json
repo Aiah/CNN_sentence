@@ -1,5 +1,6 @@
 {
   "img_w":300,
+  "max_l":56,
   "filter_hs":[3, 4, 5],
   "hidden_units":[100, 2],
   "dropout_rate":[0.5],
