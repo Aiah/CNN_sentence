@@ -67,7 +67,7 @@ if __name__ == '__main__':
         print "using: word2vec vectors"
         U = W
 
-    r = range(0, 2)
+    r = range(0, 1)
     for i in r:
         # print conf["max_l"], type(conf["max_l"])
         # print max(conf["filter_hs"]), type(max(conf["filter_hs"]))
